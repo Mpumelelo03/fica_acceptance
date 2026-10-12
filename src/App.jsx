@@ -118,14 +118,14 @@ function App() {
             <p className="message" role="status" aria-live="polite">
               {loginError || 'Protected by 2FA for all admin reviews.'}
             </p>
-            <p className="register-note">Protected by 2FA for all admin reviews.</p>
+            <p className="register-note"></p>
           </div>
         </div>
       ) : (
         <div className={`app-shell ${darkMode ? 'dark' : ''}`}>
           <aside className="sidebar">
             <div className="brand">
-              <div className="brand-mark">EP</div>
+              <div className="brand-mark">EPS</div>
               <div className="brand-copy">
                 <strong>e-Pocketshop</strong>
                 <span>Admin Verification</span>
