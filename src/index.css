@@ -102,6 +102,7 @@ form { display: grid; gap: 14px; }
   display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 0.78rem; color: var(--muted); margin-top: 2px;
 }
 .helper-row a { color: var(--green-700); font-weight: 700; }
+.text-button { border: 0; padding: 0; background: transparent; color: var(--green-700); font-weight: 700; cursor: pointer; }
 .login-button {
   min-height: 50px; margin-top: 5px; border: 0; background: linear-gradient(135deg, var(--green-700), var(--green-600));
   color: white; border-radius: 12px; font-weight: 700; cursor: pointer; transition: opacity 150ms ease, transform 150ms ease;
@@ -162,6 +163,13 @@ form { display: grid; gap: 14px; }
 .avatar { width: 36px; height: 36px; display: grid; place-items: center; font-weight: 700; border-radius: 10px; background: linear-gradient(135deg, #dff7e6, #bbefcb); color: var(--green-900); }
 .user-pill strong { font-size: 0.88rem; display: block; }
 .user-pill small { color: var(--muted); display: block; font-size: 0.7rem; }
+.logout-button {
+  min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 12px;
+  border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--ink); box-shadow: var(--shadow);
+  font-weight: 600; cursor: pointer; transition: transform 150ms ease;
+}
+.logout-button:hover { transform: translateY(-1px); }
+.logout-button svg { width: 18px; height: 18px; }
 .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 20px; }
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow); }
 .stat-card { padding: 18px 18px 16px; }

@@ -1,3 +1,4 @@
 # fica_acceptance
 This is a web app which will be verifying details of the bussinesses
-it needs to have the same look and feel like the main e-pocketshop application
+it needs to have the same look and feel like the main e-pocketshop
+this application wll also utilise apis for getting the data

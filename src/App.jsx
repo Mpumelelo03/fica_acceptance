@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react';
+import LoginPage from './LoginPage';
+
+const DEMO_AUTHENTICATOR_CODE = '123456';
 
 const initialSellers = [
-  { id: 1, sellerId: '00324', name: 'Nandi Mokoena', store: 'Mokoena Market', category: 'Grocery', phone: '+27 82 371 1010', idNumber: 'ID: 9806031497087', address: '18 Main Road, Soweto, Johannesburg', status: 'Pending', priority: 'High', submitted: '14:22', openTime: '06:41' },
-  { id: 2, sellerId: '00317', name: 'Lerato Ndlovu', store: 'Lerato Beauty', category: 'Beauty', phone: '+27 71 240 6888', idNumber: 'ID: 0311200982049', address: '44 Kent Road, Sandton, Johannesburg', status: 'Review', priority: 'Normal', submitted: '12:43', openTime: '04:51' },
-  { id: 3, sellerId: '00306', name: 'Mpho Dlamini', store: 'Dlamini Hardware', category: 'Hardware', phone: '+27 79 118 0919', idNumber: 'ID: 9102211458092', address: '88 Voortrekker Road, Pretoria', status: 'Flagged', priority: 'Low', submitted: '10:16', openTime: '08:22' },
-  { id: 4, sellerId: '00291', name: 'Thabo Sithole', store: 'Sithole Auto Parts', category: 'Automotive', phone: '+27 83 911 3446', idNumber: 'ID: 8709042110429', address: '26 Olifants Road, Durban', status: 'Approved', priority: 'Normal', submitted: '18:40', openTime: '09:07' }
+  { id: 1, sellerId: '00324', name: 'Nandi Mokoena', store: 'Mokoena Market', category: 'Grocery', phone: '+27 82 371 1010', idNumber: 'ID: 9806031497087', address: '18 Main Road, Soweto, Johannesburg', status: 'Pending', submitted: '14:22', openTime: '06:41' },
+  { id: 2, sellerId: '00317', name: 'Lerato Ndlovu', store: 'Lerato Beauty', category: 'Beauty', phone: '+27 71 240 6888', idNumber: 'ID: 0311200982049', address: '44 Kent Road, Sandton, Johannesburg', status: 'Review', submitted: '12:43', openTime: '04:51' },
+  { id: 3, sellerId: '00306', name: 'Mpho Dlamini', store: 'Dlamini Hardware', category: 'Hardware', phone: '+27 79 118 0919', idNumber: 'ID: 9102211458092', address: '88 Voortrekker Road, Pretoria', status: 'Flagged', submitted: '10:16', openTime: '08:22' },
+  { id: 4, sellerId: '00291', name: 'Thabo Sithole', store: 'Sithole Auto Parts', category: 'Automotive', phone: '+27 83 911 3446', idNumber: 'ID: 8709042110429', address: '26 Olifants Road, Durban', status: 'Approved', submitted: '18:40', openTime: '09:07' }
 ];
 
 const navItems = [
@@ -21,11 +24,18 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [selectedSellerId, setSelectedSellerId] = useState(initialSellers[0].id);
+  const [queueFilter, setQueueFilter] = useState('All');
   const [toast, setToast] = useState('');
 
+  const visibleSellers = useMemo(
+    () => queueFilter === 'All'
+      ? initialSellers
+      : initialSellers.filter((seller) => seller.status === queueFilter),
+    [queueFilter]
+  );
   const selectedSeller = useMemo(
-    () => initialSellers.find((seller) => seller.id === selectedSellerId) ?? initialSellers[0],
-    [selectedSellerId]
+    () => visibleSellers.find((seller) => seller.id === selectedSellerId) ?? visibleSellers[0] ?? initialSellers[0],
+    [selectedSellerId, visibleSellers]
   );
 
   const handleLogin = (event) => {
@@ -33,8 +43,8 @@ function App() {
     const formData = new FormData(event.currentTarget);
     const code = String(formData.get('twofa') || '').trim();
 
-    if (code.length !== 6 || !/^\d+$/.test(code)) {
-      setLoginError('Enter a valid 6-digit authenticator code.');
+    if (code !== DEMO_AUTHENTICATOR_CODE) {
+      setLoginError('Incorrect demo code. Enter 123456.');
       return;
     }
 
@@ -57,70 +67,7 @@ function App() {
   return (
     <>
       {!loggedIn ? (
-        <div className="login-shell">
-          <div className="login-box">
-            <div className="login-brand">
-              <div className="mark">EP</div>
-              <p>Internal access</p>
-              <h1>Admin Portal</h1>
-            </div>
-
-            <form onSubmit={handleLogin}>
-              <label className="field" aria-label="Email address">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                  <rect x="3.5" y="5.5" width="17" height="13" rx="3"></rect>
-                  <path d="M4.5 7l7.5 6 7.5-6"></path>
-                </svg>
-                <input type="email" name="email" placeholder="Admin email" autoComplete="email" required />
-              </label>
-
-              <div className="field password-wrap">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                  <rect x="4.5" y="10" width="15" height="11" rx="2"></rect>
-                  <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
-                </svg>
-                <input id="password" type="password" name="password" placeholder="Password" autoComplete="current-password" required />
-                <button
-                  className="password-toggle"
-                  type="button"
-                  aria-label="Show password"
-                  aria-pressed="false"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    const input = document.getElementById('password');
-                    const isVisible = input.type === 'text';
-                    input.type = isVisible ? 'password' : 'text';
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                    <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8"></path>
-                    <path d="M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.2 9.5 7-.4 1.1-1.2 2.2-2.3 3.2M6.2 6.2C3.8 7.7 2.7 9.8 2.5 12c.4 1.1 1.2 2.2 2.3 3.2A10.6 10.6 0 0 0 12 19c1 0 2-.2 2.9-.5"></path>
-                  </svg>
-                </button>
-              </div>
-
-              <label className="field" aria-label="Two factor code">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-                  <rect x="7" y="2.5" width="10" height="19" rx="2.5"></rect>
-                  <path d="M10 7h4M10 12h4M10 17h3"></path>
-                </svg>
-                <input type="text" name="twofa" placeholder="6-digit authenticator code" inputMode="numeric" maxLength="6" pattern="[0-9]*" required />
-              </label>
-
-              <div className="helper-row">
-                <span>Session timeout: 15 minutes</span>
-                <a href="#recover">Need help?</a>
-              </div>
-
-              <button className="login-button" type="submit">Verify &amp; Sign in</button>
-            </form>
-
-            <p className="message" role="status" aria-live="polite">
-              {loginError || 'Protected by 2FA for all admin reviews.'}
-            </p>
-            <p className="register-note"></p>
-          </div>
-        </div>
+        <LoginPage loginError={loginError} onSubmit={handleLogin} />
       ) : (
         <div className={`app-shell ${darkMode ? 'dark' : ''}`}>
           <aside className="sidebar">
@@ -214,6 +161,14 @@ function App() {
                     <small>Super admin</small>
                   </div>
                 </div>
+
+                <button className="logout-button" type="button" onClick={() => setLoggedIn(false)}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                    <path d="M10 17l5-5-5-5M15 12H3"></path>
+                    <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"></path>
+                  </svg>
+                  Log out
+                </button>
               </div>
             </header>
 
@@ -268,9 +223,17 @@ function App() {
                 <div className="panel-header">
                   <h3>Seller queue</h3>
                   <div className="panel-tools">
-                    <button className="pill active" type="button">All</button>
-                    <button className="pill" type="button">Pending</button>
-                    <button className="pill" type="button">Flagged</button>
+                    {['All', 'Pending', 'Review', 'Flagged'].map((filter) => (
+                      <button
+                        className={`pill ${queueFilter === filter ? 'active' : ''}`}
+                        type="button"
+                        aria-pressed={queueFilter === filter}
+                        key={filter}
+                        onClick={() => setQueueFilter(filter)}
+                      >
+                        {filter}
+                      </button>
+                    ))}
                   </div>
                 </div>
 
@@ -281,12 +244,11 @@ function App() {
                         <th>Seller</th>
                         <th>Category</th>
                         <th>Status</th>
-                        <th>Priority</th>
                         <th>Submitted</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {initialSellers.map((seller) => (
+                      {visibleSellers.map((seller) => (
                         <tr
                           className={seller.id === selectedSeller.id ? 'selected' : ''}
                           key={seller.id}
@@ -303,7 +265,6 @@ function App() {
                           </td>
                           <td>{seller.category}</td>
                           <td><span className={`chip ${seller.status.toLowerCase() === 'pending' ? 'pending' : seller.status.toLowerCase() === 'review' ? 'review' : seller.status.toLowerCase() === 'flagged' ? 'flagged' : 'approved'}`}>{seller.status}</span></td>
-                          <td><span className={`chip ${seller.priority.toLowerCase()}`}>{seller.priority}</span></td>
                           <td>{seller.submitted}</td>
                         </tr>
                       ))}
