@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import AdminUsers from './AdminUsers';
 import Dashboard from './Dashboard';
 import LoginPage from './LoginPage';
 import Sellers from './Sellers';
@@ -34,7 +35,8 @@ const navItems = [
   { label: 'Sellers', href: '#sellers', badge: null },
   { label: 'Reports', href: '#reports', badge: null },
   { label: 'Audit Log', href: '#audit-log', badge: null },
-  { label: 'Settings', href: '#settings', badge: null }
+  { label: 'Settings', href: '#settings', badge: null },
+  { label: 'Team & Admins', href: '#team-management', badge: null }
 ];
 
 function App() {
@@ -72,6 +74,13 @@ function App() {
       document.getElementById(activeSection.slice(1))?.scrollIntoView();
     });
     return () => window.cancelAnimationFrame(frameId);
+  }, [auth, activeSection]);
+
+  useEffect(() => {
+    if (auth && auth.admin.role !== 'SuperAdmin' && activeSection === '#team-management') {
+      window.location.hash = '#dashboard';
+      setActiveSection('#dashboard');
+    }
   }, [auth, activeSection]);
 
   useEffect(() => {
@@ -207,7 +216,8 @@ function App() {
     '#sellers': 'All sellers',
     '#reports': 'Reports',
     '#audit-log': 'Audit Log',
-    '#settings': 'Settings'
+    '#settings': 'Settings',
+    '#team-management': 'Team & admin management'
   };
 
   useEffect(() => {
@@ -284,7 +294,7 @@ function App() {
             </div>
 
             <nav className="nav" aria-label="Sidebar navigation">
-              {navItems.map((item, index) => (
+              {navItems.filter((item) => item.href !== '#team-management' || auth.admin.role === 'SuperAdmin').map((item, index) => (
                 <a
                   className={`nav-item ${activeSection === item.href ? 'active' : ''}`}
                   aria-current={activeSection === item.href ? 'page' : undefined}
@@ -319,6 +329,11 @@ function App() {
                   {index === 5 && (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M12 3v3m0 15v3m9-9h-3M6 12H3m15.5 6.5L16 16l-2.5 2.5 1.5 1.5 2.5-2.5zm-11-11L8 8l2.5-2.5-1.5-1.5L6.5 6.5zM16 8l1.5-1.5L16 5l-1.5 1.5L16 8zm-8 8l1.5 1.5L8 16l-1.5-1.5L8 13z"></path>
+                    </svg>
+                  )}
+                  {index === 6 && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm10 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
                     </svg>
                   )}
                   {item.label}
@@ -577,6 +592,10 @@ function App() {
               <div className="panel-header"><h3 id="settings-title">Settings</h3></div>
               <p>Portal settings are not available yet. No settings screen or API is configured.</p>
             </section>}
+
+            {activeSection === '#team-management' && auth.admin.role === 'SuperAdmin' && (
+              <AdminUsers token={auth.token} currentAdmin={auth.admin} />
+            )}
           </main>
         </div>
       )}
