@@ -577,18 +577,7 @@ function App() {
 
             {activeSection === '#sellers' && <Sellers token={auth.token} />}
 
-            {activeSection === '#reports' && <section className="panel workspace-placeholder" id="reports" aria-labelledby="reports-title">
-              <div className="panel-header"><h3 id="reports-title">Reports</h3></div>
-              <p>Detailed reports are not available yet. Current verification totals are shown on the Dashboard.</p>
-              <a href="#dashboard">View dashboard metrics</a>
-            </section>}
-
             {activeSection === '#audit-log' && <AuditLogs token={auth.token} />}
-
-            {activeSection === '#settings' && <section className="panel workspace-placeholder" id="settings" aria-labelledby="settings-title">
-              <div className="panel-header"><h3 id="settings-title">Settings</h3></div>
-              <p>Portal settings are not available yet. No settings screen or API is configured.</p>
-            </section>}
 
             {activeSection === '#team-management' && auth.admin.role === 'SuperAdmin' && (
               <AdminUsers token={auth.token} currentAdmin={auth.admin} />
