@@ -30,6 +30,8 @@ function Sellers({ token }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [pagination, setPagination] = useState(null);
   const [refreshCount, setRefreshCount] = useState(0);
 
   useEffect(() => {
@@ -43,9 +45,14 @@ function Sellers({ token }) {
       try {
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
         const endpoint = import.meta.env.DEV || !apiBaseUrl
-          ? '/api/admin/sellers'
-          : `${apiBaseUrl}/api/admin/sellers`;
-        const response = await fetch(endpoint, {
+          ? '/api/admin/queue'
+          : `${apiBaseUrl}/api/admin/queue`;
+        const query = new URLSearchParams({
+          page: String(page),
+          limit: '20',
+          status: 'pending'
+        });
+        const response = await fetch(`${endpoint}?${query}`, {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal
         });
@@ -60,27 +67,43 @@ function Sellers({ token }) {
           throw new Error(result?.message || `Unable to load sellers (HTTP ${response.status}).`);
         }
 
-        const items = Array.isArray(result) ? result : result?.items ?? result?.sellers;
-        if (!Array.isArray(items)) {
-          throw new Error('Sellers API response is missing its sellers list.');
+        if (!Array.isArray(result?.items)) {
+          throw new Error('Queue API response is missing its items list.');
+        }
+        if (
+          !Number.isInteger(result.total) ||
+          result.total < 0 ||
+          !Number.isInteger(result.pages) ||
+          result.pages < 0 ||
+          !Number.isInteger(result.current_page) ||
+          result.current_page < 1 ||
+          (result.pages > 0 && result.current_page > result.pages)
+        ) {
+          throw new Error('Queue API response is missing valid pagination details.');
         }
 
-        const validSellers = items.map((seller) => {
+        const validSellers = result.items.map((seller) => {
           if (
             !seller ||
             (typeof seller.business_id !== 'string' && typeof seller.business_id !== 'number') ||
             typeof seller.name !== 'string' ||
             typeof seller.verification_status !== 'string'
           ) {
-            throw new Error('Sellers API returned a seller with missing or invalid business_id, name, or verification_status.');
+            throw new Error('Queue API returned a seller with missing or invalid business_id, name, or verification_status.');
           }
           return seller;
         });
 
         setSellers(validSellers);
+        setPagination({
+          total: result.total,
+          pages: result.pages,
+          currentPage: result.current_page
+        });
+        if (result.current_page !== page) setPage(result.current_page);
       } catch (loadError) {
         if (loadError.name !== 'AbortError') {
-          setError(loadError instanceof Error ? loadError.message : 'Unable to load sellers.');
+          setError(loadError instanceof Error ? loadError.message : 'Unable to load the seller queue.');
         }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
@@ -89,7 +112,7 @@ function Sellers({ token }) {
 
     loadSellers();
     return () => controller.abort();
-  }, [token, refreshCount]);
+  }, [token, page, refreshCount]);
 
   const visibleSellers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -103,9 +126,7 @@ function Sellers({ token }) {
     <section id="sellers" aria-labelledby="sellers-title">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">Directory</span>
-          <h2 id="sellers-title">All sellers</h2>
-          <p className="meta">Seller records and their available verification details.</p>
+          <p className="meta">Search applies to the current page of queue results.</p>
         </div>
         <button
           className="pill"
@@ -129,9 +150,17 @@ function Sellers({ token }) {
 
       {error && <p className="dashboard-error" role="alert">{error}</p>}
       {loading && <p className="meta" role="status">Loading sellers…</p>}
+      {pagination && (
+        <p className="queue-summary">
+          {pagination.total} sellers
+          {pagination.pages > 0 && ` · page ${pagination.currentPage} of ${pagination.pages}`}
+        </p>
+      )}
       {!loading && !error && visibleSellers.length === 0 && (
         <div className="panel empty-state">
-          <p>{search ? 'No sellers match your search.' : 'No sellers found.'}</p>
+          <p>{search
+            ? 'No sellers on this page match your search.'
+            : 'The API returned no sellers with pending verification.'}</p>
         </div>
       )}
 
@@ -202,6 +231,27 @@ function Sellers({ token }) {
           );
         })}
       </div>
+      {pagination && pagination.pages > 1 && (
+        <div className="pagination">
+          <button
+            className="pill"
+            type="button"
+            onClick={() => setPage((currentPage) => Math.max(1, currentPage - 1))}
+            disabled={loading || pagination.currentPage <= 1}
+          >
+            Previous
+          </button>
+          <span className="meta">Page {pagination.currentPage} of {pagination.pages}</span>
+          <button
+            className="pill"
+            type="button"
+            onClick={() => setPage((currentPage) => Math.min(pagination.pages, currentPage + 1))}
+            disabled={loading || pagination.currentPage >= pagination.pages}
+          >
+            Next
+          </button>
+        </div>
+      )}
     </section>
   );
 }

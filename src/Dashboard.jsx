@@ -78,7 +78,6 @@ function Dashboard({ token }) {
       <div className="page-heading">
         <div>
           <span className="eyebrow">Overview</span>
-          <h2>Verification analytics</h2>
           <p className="meta">A summary of seller verification activity.</p>
         </div>
       </div>

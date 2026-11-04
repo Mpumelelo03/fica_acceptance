@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import AdminUsers from './AdminUsers';
+import AuditLogs from './AuditLogs';
 import Dashboard from './Dashboard';
 import LoginPage from './LoginPage';
 import Sellers from './Sellers';
@@ -96,7 +97,11 @@ function App() {
         const queueEndpoint = import.meta.env.DEV || !apiBaseUrl
           ? '/api/admin/queue'
           : `${apiBaseUrl}/api/admin/queue`;
-        const query = new URLSearchParams({ page: String(queuePage), limit: '20' });
+        const query = new URLSearchParams({
+          page: String(queuePage),
+          limit: '20',
+          status: 'pending'
+        });
         const response = await fetch(`${queueEndpoint}?${query}`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${auth.token}` },
@@ -213,7 +218,7 @@ function App() {
   const pageTitles = {
     '#dashboard': 'Verification analytics',
     '#queue': 'Seller verification queue',
-    '#sellers': 'All sellers',
+    '#sellers': 'Sellers in verification queue',
     '#reports': 'Reports',
     '#audit-log': 'Audit Log',
     '#settings': 'Settings',
@@ -366,12 +371,6 @@ function App() {
               </div>
 
               <div className="topbar-actions">
-                <button className="icon-button" type="button" aria-label="Notifications">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                    <path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 0 1-6 0"></path>
-                  </svg>
-                </button>
-
                 <div className="user-pill">
                   <div className="avatar">{auth.admin.email?.[0]?.toUpperCase() || 'A'}</div>
                   <div>
@@ -389,7 +388,7 @@ function App() {
                 <div className="panel-header">
                   <h3>Seller queue</h3>
                   <div className="panel-tools">
-                    <span className="meta">Pending queue</span>
+                    <span className="meta">Pending verification queue</span>
                     <button className="pill" type="button" onClick={() => setQueueRefresh((current) => current + 1)} disabled={queueLoading}>
                       {queueLoading ? 'Loading…' : 'Refresh'}
                     </button>
@@ -400,7 +399,8 @@ function App() {
                 {decisionMessage && <p className="decision-message queue-decision-feedback" role="status">{decisionMessage}</p>}
                 {queueMeta && (
                   <p className="queue-summary">
-                    {queueMeta.total} sellers · page {queueMeta.currentPage} of {queueMeta.pages}
+                    {queueMeta.total} sellers
+                    {queueMeta.pages > 0 && ` · page ${queueMeta.currentPage} of ${queueMeta.pages}`}
                   </p>
                 )}
 
@@ -422,7 +422,7 @@ function App() {
                         <tr><td colSpan="4" role="alert">{queueError}</td></tr>
                       )}
                       {!queueLoading && !queueError && sellers.length === 0 && (
-                        <tr><td colSpan="4">No sellers are waiting for verification.</td></tr>
+                        <tr><td colSpan="4">The API returned no sellers with pending verification.</td></tr>
                       )}
                       {sellers.map((seller) => (
                         <tr
@@ -583,10 +583,7 @@ function App() {
               <a href="#dashboard">View dashboard metrics</a>
             </section>}
 
-            {activeSection === '#audit-log' && <section className="panel workspace-placeholder" id="audit-log" aria-labelledby="audit-log-title">
-              <div className="panel-header"><h3 id="audit-log-title">Audit Log</h3></div>
-              <p>The audit log is not available yet because no audit-log data source is connected.</p>
-            </section>}
+            {activeSection === '#audit-log' && <AuditLogs token={auth.token} />}
 
             {activeSection === '#settings' && <section className="panel workspace-placeholder" id="settings" aria-labelledby="settings-title">
               <div className="panel-header"><h3 id="settings-title">Settings</h3></div>

@@ -243,7 +243,6 @@ function AdminUsers({ token, currentAdmin }) {
       <div className="page-heading">
         <div>
           <span className="eyebrow">SuperAdmin only</span>
-          <h2>Team &amp; admin management</h2>
           <p className="meta">Manage platform admin accounts, roles, and access.</p>
         </div>
         <button
