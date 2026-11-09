@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
+import { apiUrl } from './api';
 
 function getEndpoint() {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
-  return import.meta.env.DEV || !apiBaseUrl ? '/api/admin/users' : `${apiBaseUrl}/api/admin/users`;
+  return apiUrl('/api/admin/users');
 }
 
 async function readResponse(response, action) {

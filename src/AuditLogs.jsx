@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiUrl } from './api';
 
 const pageSize = 20;
 const actions = [
@@ -10,10 +11,7 @@ const actions = [
 ];
 
 function getEndpoint() {
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
-  return import.meta.env.DEV || !apiBaseUrl
-    ? '/api/admin/audit-logs'
-    : `${apiBaseUrl}/api/admin/audit-logs`;
+  return apiUrl('/api/admin/audit-logs');
 }
 
 function formatDate(value) {
@@ -37,17 +35,33 @@ function validateLog(entry) {
   return entry;
 }
 
-function AuditLogs({ token }) {
+function AuditLogs({ token, businessId, embedded = false, refreshToken = 0 }) {
   const [logs, setLogs] = useState([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [page, setPage] = useState(1);
-  const [draftFilters, setDraftFilters] = useState({ action: '', admin_id: '', business_id: '' });
-  const [filters, setFilters] = useState({ action: '', admin_id: '', business_id: '' });
+  const [draftFilters, setDraftFilters] = useState(() => ({
+    action: '',
+    admin_id: '',
+    business_id: businessId == null ? '' : String(businessId)
+  }));
+  const [filters, setFilters] = useState(() => ({
+    action: '',
+    admin_id: '',
+    business_id: businessId == null ? '' : String(businessId)
+  }));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [refresh, setRefresh] = useState(0);
+
+  useEffect(() => {
+    if (businessId == null) return;
+    const id = String(businessId);
+    setPage(1);
+    setDraftFilters((current) => ({ ...current, business_id: id }));
+    setFilters((current) => ({ ...current, business_id: id }));
+  }, [businessId]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -102,7 +116,7 @@ function AuditLogs({ token }) {
 
     loadAuditLogs();
     return () => controller.abort();
-  }, [filters, page, refresh, token]);
+  }, [filters, page, refresh, refreshToken, token]);
 
   const handleFilterSubmit = (event) => {
     event.preventDefault();
@@ -121,20 +135,34 @@ function AuditLogs({ token }) {
   };
 
   return (
-    <section className="audit-management" id="audit-log" aria-label="Admin audit log" aria-busy={loading}>
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">Admin activity</span>
-          <p className="meta">Review verification decisions and admin account changes.</p>
+    <section
+      className={`audit-management${embedded ? ' seller-audit-embedded' : ''}`}
+      id={embedded ? undefined : 'audit-log'}
+      aria-label={embedded ? 'Business verification history' : 'Admin audit log'}
+      aria-busy={loading}
+    >
+      {embedded ? (
+        <div className="panel-header">
+          <h3>Business verification history</h3>
+          <button className="pill" type="button" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
         </div>
-        <button className="pill" type="button" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
-          {loading ? 'Loading…' : 'Refresh'}
-        </button>
-      </div>
+      ) : (
+        <div className="page-heading">
+          <div>
+            <span className="eyebrow">Admin activity</span>
+            <p className="meta">Review verification decisions and admin account changes.</p>
+          </div>
+          <button className="pill" type="button" onClick={() => setRefresh((value) => value + 1)} disabled={loading}>
+            {loading ? 'Loading…' : 'Refresh'}
+          </button>
+        </div>
+      )}
 
       {error && <p className="admin-feedback admin-error" role="alert">{error}</p>}
 
-      <form className="panel audit-filters" onSubmit={handleFilterSubmit}>
+      {!embedded && <form className="panel audit-filters" onSubmit={handleFilterSubmit}>
         <label>
           Action
           <select
@@ -169,7 +197,7 @@ function AuditLogs({ token }) {
           <button className="primary-btn" type="submit" disabled={loading}>Apply filters</button>
           <button className="secondary-btn" type="button" onClick={clearFilters} disabled={loading}>Clear</button>
         </div>
-      </form>
+      </form>}
 
       <div className="panel audit-directory">
         <div className="panel-header">

@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
+import { apiUrl } from './api';
 
-function LoginPage({ onLoginSuccess }) {
+function LoginPage({ onLoginSuccess, authStorageError }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -20,11 +21,7 @@ function LoginPage({ onLoginSuccess }) {
       const requestBody = { email, password };
       if (requiresCode) requestBody.totp_code = totpCode.trim();
 
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
-      const loginEndpoint = import.meta.env.DEV || !apiBaseUrl
-        ? '/api/admin/login'
-        : `${apiBaseUrl}/api/admin/login`;
-      const response = await fetch(loginEndpoint, {
+      const response = await fetch(apiUrl('/api/admin/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
@@ -197,6 +194,7 @@ function LoginPage({ onLoginSuccess }) {
               ? 'Enter the six-digit code from your authenticator app.'
               : 'Sign in with your admin email and password.')}
         </p>
+        {authStorageError && <p className="dashboard-error" role="alert">{authStorageError}</p>}
       </div>
     </main>
   );

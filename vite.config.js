@@ -9,14 +9,12 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 5173,
-      proxy: VITE_API_BASE_URL
-        ? {
-            '/api': {
-              target: VITE_API_BASE_URL,
-              changeOrigin: true
-            }
-          }
-        : undefined
+      proxy: {
+        '/api': {
+          target: VITE_API_BASE_URL || 'http://localhost:5000',
+          changeOrigin: true
+        }
+      }
     }
   };
 });

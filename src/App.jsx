@@ -4,21 +4,51 @@ import AuditLogs from './AuditLogs';
 import Dashboard from './Dashboard';
 import LoginPage from './LoginPage';
 import Sellers from './Sellers';
+import { apiUrl } from './api';
+
+const authStorageKey = 'fica-admin-auth';
+
+function getStoredAuth() {
+  try {
+    const storedAuth = window.localStorage.getItem(authStorageKey);
+    if (!storedAuth) return null;
+
+    const auth = JSON.parse(storedAuth);
+    if (
+      typeof auth?.token === 'string' &&
+      auth.token &&
+      typeof auth.admin?.email === 'string' &&
+      ['Admin', 'SuperAdmin'].includes(auth.admin.role)
+    ) {
+      return auth;
+    }
+
+    window.localStorage.removeItem(authStorageKey);
+    console.warn('Removed an invalid saved admin session.');
+  } catch (error) {
+    console.error('Unable to restore the saved admin session.', error);
+  }
+  return null;
+}
 
 function formatVerificationStatus(status) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function statusClass(status) {
-  const normalizedStatus = status.toLowerCase();
+  const normalizedStatus = status.toLowerCase().replace(/_/g, ' ');
   if (normalizedStatus.includes('pending')) return 'pending';
   if (normalizedStatus.includes('review')) return 'review';
   if (normalizedStatus.includes('flagged')) return 'flagged';
+  if (normalizedStatus.includes('rejected')) return 'high';
   if (normalizedStatus.includes('approved')) return 'approved';
+  if (normalizedStatus.includes('not submitted')) return 'low';
   return 'normal';
 }
 
 function formatVerified(value) {
+  if (value === 'merchant') return 'Tier 1 · Merchant';
+  if (value === 'business') return 'Tier 2 · Business';
   if (value === true || value === 'true') return 'Yes';
   if (value === false || value === 'false') return 'No';
   return 'Not provided';
@@ -34,14 +64,13 @@ const navItems = [
   { label: 'Dashboard', href: '#dashboard', badge: null },
   { label: 'Queue', href: '#queue', badge: null },
   { label: 'Sellers', href: '#sellers', badge: null },
-  { label: 'Reports', href: '#reports', badge: null },
   { label: 'Audit Log', href: '#audit-log', badge: null },
-  { label: 'Settings', href: '#settings', badge: null },
   { label: 'Team & Admins', href: '#team-management', badge: null }
 ];
 
 function App() {
-  const [auth, setAuth] = useState(null);
+  const [auth, setAuth] = useState(getStoredAuth);
+  const [authStorageError, setAuthStorageError] = useState('');
   const [activeSection, setActiveSection] = useState(getActiveSection);
   const [sellers, setSellers] = useState([]);
   const [selectedSellerId, setSelectedSellerId] = useState(null);
@@ -49,6 +78,7 @@ function App() {
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState('');
   const [queuePage, setQueuePage] = useState(1);
+  const [queueTier, setQueueTier] = useState('');
   const [queueLoading, setQueueLoading] = useState(false);
   const [queueError, setQueueError] = useState('');
   const [queueMeta, setQueueMeta] = useState(null);
@@ -58,6 +88,28 @@ function App() {
   const [decisionError, setDecisionError] = useState('');
   const [decisionMessage, setDecisionMessage] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+
+  const handleLoginSuccess = (session) => {
+    setAuth(session);
+    setAuthStorageError('');
+    try {
+      window.localStorage.setItem(authStorageKey, JSON.stringify(session));
+    } catch (error) {
+      console.error('Unable to persist the admin session.', error);
+      setAuthStorageError('Your session is active, but could not be saved for the next visit.');
+    }
+  };
+
+  const handleLogout = () => {
+    setAuth(null);
+    setAuthStorageError('');
+    try {
+      window.localStorage.removeItem(authStorageKey);
+    } catch (error) {
+      console.error('Unable to clear the saved admin session.', error);
+      setAuthStorageError('The saved session could not be cleared from this browser.');
+    }
+  };
 
   useEffect(() => {
     const updateActiveSection = () => {
@@ -93,16 +145,13 @@ function App() {
       setQueueError('');
 
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
-        const queueEndpoint = import.meta.env.DEV || !apiBaseUrl
-          ? '/api/admin/queue'
-          : `${apiBaseUrl}/api/admin/queue`;
         const query = new URLSearchParams({
           page: String(queuePage),
           limit: '20',
           status: 'pending'
         });
-        const response = await fetch(`${queueEndpoint}?${query}`, {
+        if (queueTier) query.set('tier', queueTier);
+        const response = await fetch(`${apiUrl('/api/admin/queue')}?${query}`, {
           method: 'GET',
           headers: { Authorization: `Bearer ${auth.token}` },
           signal: controller.signal
@@ -117,8 +166,14 @@ function App() {
         if (!response.ok) {
           throw new Error(result.message || `Unable to load seller queue (HTTP ${response.status}).`);
         }
-        if (!Array.isArray(result.items)) {
-          throw new Error('Queue API response is missing its items list.');
+        if (
+          !Array.isArray(result.items) ||
+          !Number.isInteger(result.total) || result.total < 0 ||
+          !Number.isInteger(result.pages) || result.pages < 0 ||
+          !Number.isInteger(result.current_page) || result.current_page < 1 ||
+          (result.pages > 0 && result.current_page > result.pages)
+        ) {
+          throw new Error('Queue API response is missing valid items or pagination details.');
         }
 
         const queueItems = result.items.map((item) => {
@@ -136,7 +191,12 @@ function App() {
             sellerId: String(item.business_id),
             name: item.name,
             status: formatVerificationStatus(item.verification_status),
-            verified: item.verified
+            verified: item.verified,
+            tier: item.tier || (
+              item.verification_status.includes('business') || item.verified === 'business'
+                ? 'business'
+                : 'merchant'
+            )
           };
         });
 
@@ -160,9 +220,31 @@ function App() {
 
     loadQueue();
     return () => controller.abort();
-  }, [auth?.token, activeSection, queuePage, queueRefresh]);
+  }, [auth?.token, activeSection, queuePage, queueRefresh, queueTier]);
 
   const selectedSeller = sellers.find((seller) => seller.id === selectedSellerId) ?? sellers[0] ?? null;
+  const currentSellerDetails = sellerDetails?.business_id != null &&
+    String(sellerDetails.business_id) === selectedSeller?.sellerId
+    ? sellerDetails
+    : null;
+  const selectedSellerTier = currentSellerDetails?.current_tier ?? selectedSeller?.tier;
+  const selectedTierLabel = selectedSellerTier === 'business'
+    ? 'Tier 2 (business)'
+    : selectedSellerTier === 'merchant'
+      ? 'Tier 1 (merchant)'
+      : 'verification tier';
+
+  useEffect(() => {
+    if (activeSection !== '#queue') return undefined;
+
+    const refreshQueue = () => setQueueRefresh((current) => current + 1);
+    const intervalId = window.setInterval(refreshQueue, 30_000);
+    window.addEventListener('focus', refreshQueue);
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', refreshQueue);
+    };
+  }, [activeSection]);
 
   const handleVerificationDecision = async (decision) => {
     const reason = rejectionReason.trim();
@@ -172,6 +254,11 @@ function App() {
       return;
     }
     if (!selectedSeller) return;
+    if (!['merchant', 'business'].includes(selectedSellerTier)) {
+      setDecisionError('The seller verification tier is unavailable. Refresh the seller details before deciding.');
+      setDecisionMessage('');
+      return;
+    }
 
     setDecisionLoading(true);
     setDecisionInProgress(decision);
@@ -179,17 +266,19 @@ function App() {
     setDecisionMessage('');
 
     try {
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
-      const endpoint = import.meta.env.DEV || !apiBaseUrl
-        ? `/api/admin/verification/${encodeURIComponent(selectedSeller.sellerId)}/${decision}`
-        : `${apiBaseUrl}/api/admin/verification/${encodeURIComponent(selectedSeller.sellerId)}/${decision}`;
+      const endpoint = apiUrl(
+        `/api/admin/verification/${encodeURIComponent(selectedSeller.sellerId)}/${decision}`
+      );
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${auth.token}`,
-          ...(decision === 'reject' ? { 'Content-Type': 'application/json' } : {})
+          'Content-Type': 'application/json'
         },
-        ...(decision === 'reject' ? { body: JSON.stringify({ reason }) } : {})
+        body: JSON.stringify({
+          tier: selectedSellerTier,
+          ...(decision === 'reject' ? { reason } : {})
+        })
       });
 
       const contentType = response.headers.get('content-type') || '';
@@ -218,10 +307,8 @@ function App() {
   const pageTitles = {
     '#dashboard': 'Verification analytics',
     '#queue': 'Seller verification queue',
-    '#sellers': 'Sellers in verification queue',
-    '#reports': 'Reports',
+    '#sellers': 'Businesses and sellers',
     '#audit-log': 'Audit Log',
-    '#settings': 'Settings',
     '#team-management': 'Team & admin management'
   };
 
@@ -239,11 +326,9 @@ function App() {
       setDetailsError('');
 
       try {
-        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL?.replace(/\/+$/, '');
-        const detailsEndpoint = import.meta.env.DEV || !apiBaseUrl
-          ? `/api/admin/verification/${encodeURIComponent(selectedSeller.sellerId)}`
-          : `${apiBaseUrl}/api/admin/verification/${encodeURIComponent(selectedSeller.sellerId)}`;
-        const response = await fetch(detailsEndpoint, {
+        const response = await fetch(apiUrl(
+          `/api/admin/verification/${encodeURIComponent(selectedSeller.sellerId)}`
+        ), {
           method: 'GET',
           headers: { Authorization: 'Bearer ' + auth.token },
           signal: controller.signal
@@ -264,9 +349,10 @@ function App() {
           (typeof result.business_id !== 'string' && typeof result.business_id !== 'number') ||
           String(result.business_id) !== selectedSeller.sellerId ||
           typeof result.name !== 'string' ||
-          typeof result.verification_status !== 'string'
+          typeof result.verification_status !== 'string' ||
+          !['merchant', 'business'].includes(result.current_tier)
         ) {
-          throw new Error('Seller details API returned missing or mismatched business details.');
+          throw new Error('Seller details API returned missing or mismatched business details or an invalid current_tier.');
         }
 
         setSellerDetails(result);
@@ -286,7 +372,7 @@ function App() {
   return (
     <>
       {!auth ? (
-        <LoginPage onLoginSuccess={setAuth} />
+        <LoginPage onLoginSuccess={handleLoginSuccess} authStorageError={authStorageError} />
       ) : (
         <div className="app-shell">
           <aside className="sidebar">
@@ -323,20 +409,10 @@ function App() {
                   )}
                   {index === 3 && (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M6 18V9m6 9V5m6 13v-7"></path>
-                    </svg>
-                  )}
-                  {index === 4 && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M6 20.5V7.5A2.5 2.5 0 0 1 8.5 5h7A2.5 2.5 0 0 1 18 7.5v13M9 9h6M9 13h6M9 17h4"></path>
                     </svg>
                   )}
-                  {index === 5 && (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                      <path d="M12 3v3m0 15v3m9-9h-3M6 12H3m15.5 6.5L16 16l-2.5 2.5 1.5 1.5 2.5-2.5zm-11-11L8 8l2.5-2.5-1.5-1.5L6.5 6.5zM16 8l1.5-1.5L16 5l-1.5 1.5L16 8zm-8 8l1.5 1.5L8 16l-1.5-1.5L8 13z"></path>
-                    </svg>
-                  )}
-                  {index === 6 && (
+                  {index === 4 && (
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2m6-10a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm10 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
                     </svg>
@@ -353,7 +429,7 @@ function App() {
                 <strong>{auth.admin.role || 'Admin'}</strong>
                 <span>{auth.admin.email}</span>
               </div>
-              <button className="logout-button sidebar-logout" type="button" onClick={() => setAuth(null)}>
+              <button className="logout-button sidebar-logout" type="button" onClick={handleLogout}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                   <path d="M10 17l5-5-5-5M15 12H3"></path>
                   <path d="M12 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"></path>
@@ -364,6 +440,7 @@ function App() {
           </aside>
 
           <main className="main">
+            {authStorageError && <p className="admin-feedback admin-error" role="alert">{authStorageError}</p>}
             <header className="topbar">
               <div className="topbar-title">
                 <span>Admin portal</span>
@@ -388,7 +465,21 @@ function App() {
                 <div className="panel-header">
                   <h3>Seller queue</h3>
                   <div className="panel-tools">
-                    <span className="meta">Pending verification queue</span>
+                    <label className="queue-tier-filter">
+                      <span className="visually-hidden">Verification tier</span>
+                      <select
+                        value={queueTier}
+                        onChange={(event) => {
+                          setQueueTier(event.target.value);
+                          setQueuePage(1);
+                        }}
+                        disabled={queueLoading}
+                      >
+                        <option value="">All tiers</option>
+                        <option value="merchant">Tier 1 · Merchant</option>
+                        <option value="business">Tier 2 · Business</option>
+                      </select>
+                    </label>
                     <button className="pill" type="button" onClick={() => setQueueRefresh((current) => current + 1)} disabled={queueLoading}>
                       {queueLoading ? 'Loading…' : 'Refresh'}
                     </button>
@@ -422,7 +513,7 @@ function App() {
                         <tr><td colSpan="4" role="alert">{queueError}</td></tr>
                       )}
                       {!queueLoading && !queueError && sellers.length === 0 && (
-                        <tr><td colSpan="4">The API returned no sellers with pending verification.</td></tr>
+                        <tr><td colSpan="4">No sellers are waiting in this verification tier.</td></tr>
                       )}
                       {sellers.map((seller) => (
                         <tr
@@ -477,47 +568,57 @@ function App() {
                   <>
                     <div className="review-header">
                       <div>
-                        <h3>{sellerDetails?.name ?? selectedSeller.name}</h3>
+                        <h3>{currentSellerDetails?.name ?? selectedSeller.name}</h3>
                         <div className="meta">Business #{selectedSeller.sellerId}</div>
                       </div>
-                      <span className={`chip ${statusClass(sellerDetails?.verification_status ?? selectedSeller.status)}`}>
-                        {formatVerificationStatus(sellerDetails?.verification_status ?? selectedSeller.status)}
+                      <span className={`chip ${statusClass(currentSellerDetails?.verification_status ?? selectedSeller.status)}`}>
+                        {formatVerificationStatus(currentSellerDetails?.verification_status ?? selectedSeller.status)}
                       </span>
                     </div>
 
                     <div className="details-grid">
                       <div className="info-block">
                         <span className="info-label">Business ID</span>
-                        <p className="info-value">{sellerDetails?.business_id ?? selectedSeller.sellerId}</p>
+                        <p className="info-value">{currentSellerDetails?.business_id ?? selectedSeller.sellerId}</p>
                       </div>
                       <div className="info-block">
                         <span className="info-label">Verified</span>
-                        <p className="info-value">{formatVerified(selectedSeller.verified)}</p>
+                        <p className="info-value">{formatVerified(currentSellerDetails?.verified ?? selectedSeller.verified)}</p>
+                      </div>
+                      <div className="info-block">
+                        <span className="info-label">Current tier</span>
+                        <p className="info-value">{selectedSellerTier || 'Not provided'}</p>
                       </div>
                     </div>
                     {detailsLoading && <p className="meta" role="status">Loading business details and documents…</p>}
                     {detailsError && <p className="meta" role="alert">{detailsError}</p>}
-                    {sellerDetails && (
+                    {currentSellerDetails && (
                       <>
-                        {sellerDetails.description && (
+                        {currentSellerDetails.rejection_reason && (
+                          <div className="info-block">
+                            <span className="info-label">Latest rejection reason</span>
+                            <p className="info-value">{currentSellerDetails.rejection_reason}</p>
+                          </div>
+                        )}
+                        {currentSellerDetails.description && (
                           <div className="info-block seller-description">
                             <span className="info-label">Description</span>
-                            <p className="info-value">{sellerDetails.description}</p>
+                            <p className="info-value">{currentSellerDetails.description}</p>
                           </div>
                         )}
-                        {sellerDetails.address && (
+                        {currentSellerDetails.address && (
                           <div className="info-block seller-address">
                             <span className="info-label">Address</span>
-                            <p className="info-value">{sellerDetails.address}</p>
+                            <p className="info-value">{currentSellerDetails.address}</p>
                           </div>
                         )}
-                        {sellerDetails.documents &&
-                          typeof sellerDetails.documents === 'object' &&
-                          !Array.isArray(sellerDetails.documents) && (
+                        {currentSellerDetails.documents &&
+                          typeof currentSellerDetails.documents === 'object' &&
+                          !Array.isArray(currentSellerDetails.documents) && (
                           <section className="seller-documents" aria-label="Seller documents">
                             <h4>Documents</h4>
                             <div className="doc-grid">
-                              {Object.entries(sellerDetails.documents).map(([key, url]) => {
+                              {Object.entries(currentSellerDetails.documents).map(([key, url]) => {
                                 if (typeof url !== 'string' || !url) return null;
                                 const label = key.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
                                 return (
@@ -551,17 +652,17 @@ function App() {
                           className="primary-btn"
                           type="button"
                           onClick={() => handleVerificationDecision('approve')}
-                          disabled={decisionLoading}
+                          disabled={decisionLoading || detailsLoading || !currentSellerDetails || !['merchant', 'business'].includes(selectedSellerTier)}
                         >
-                          {decisionInProgress === 'approve' ? 'Approving…' : 'Approve application'}
+                          {decisionInProgress === 'approve' ? 'Approving…' : `Approve ${selectedTierLabel}`}
                         </button>
                         <button
                           className="ghost-btn"
                           type="button"
                           onClick={() => handleVerificationDecision('reject')}
-                          disabled={decisionLoading}
+                          disabled={decisionLoading || detailsLoading || !currentSellerDetails || !['merchant', 'business'].includes(selectedSellerTier)}
                         >
-                          {decisionInProgress === 'reject' ? 'Rejecting…' : 'Reject application'}
+                          {decisionInProgress === 'reject' ? 'Rejecting…' : `Reject ${selectedTierLabel}`}
                         </button>
                       </div>
                     </div>
@@ -571,6 +672,14 @@ function App() {
                     <h3>{queueError ? 'Seller details unavailable' : 'No seller selected'}</h3>
                     <p className="meta">{queueError || (queueLoading ? 'Loading seller queue…' : 'Select a seller from the queue to view details.')}</p>
                   </div>
+                )}
+                {selectedSeller && (
+                  <AuditLogs
+                    token={auth.token}
+                    businessId={selectedSeller.sellerId}
+                    embedded
+                    refreshToken={queueRefresh}
+                  />
                 )}
               </aside>
             </section>}
