@@ -88,6 +88,70 @@ function App() {
   const [decisionError, setDecisionError] = useState('');
   const [decisionMessage, setDecisionMessage] = useState('');
   const [rejectionReason, setRejectionReason] = useState('');
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [changePasswordError, setChangePasswordError] = useState('');
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState('');
+  const [changePasswordSubmitting, setChangePasswordSubmitting] = useState(false);
+
+  const openChangePassword = () => {
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setChangePasswordError('');
+    setChangePasswordSuccess('');
+    setChangePasswordOpen(true);
+  };
+
+  const closeChangePassword = () => {
+    setChangePasswordOpen(false);
+    setChangePasswordError('');
+    setChangePasswordSuccess('');
+  };
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault();
+    setChangePasswordError('');
+    setChangePasswordSuccess('');
+
+    if (newPassword.length < 8) {
+      setChangePasswordError('New password must be at least 8 characters long.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setChangePasswordError('New passwords do not match.');
+      return;
+    }
+
+    setChangePasswordSubmitting(true);
+    try {
+      const response = await fetch(apiUrl('/api/admin/change-password'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${auth.token}`
+        },
+        body: JSON.stringify({
+          current_password: currentPassword,
+          new_password: newPassword
+        })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.message || 'Unable to change password.');
+      }
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+      setChangePasswordSuccess(result.message || 'Password changed successfully.');
+    } catch (error) {
+      setChangePasswordError(error instanceof Error ? error.message : 'Unable to change password.');
+    } finally {
+      setChangePasswordSubmitting(false);
+    }
+  };
 
   const handleLoginSuccess = (session) => {
     setAuth(session);
@@ -102,6 +166,7 @@ function App() {
 
   const handleLogout = () => {
     setAuth(null);
+    setChangePasswordOpen(false);
     setAuthStorageError('');
     try {
       window.localStorage.removeItem(authStorageKey);
@@ -429,6 +494,13 @@ function App() {
                 <strong>{auth.admin.role || 'Admin'}</strong>
                 <span>{auth.admin.email}</span>
               </div>
+              <button className="logout-button sidebar-logout" type="button" onClick={openChangePassword}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                  <rect x="4.5" y="10" width="15" height="11" rx="2"></rect>
+                  <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+                </svg>
+                Change password
+              </button>
               <button className="logout-button sidebar-logout" type="button" onClick={handleLogout}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
                   <path d="M10 17l5-5-5-5M15 12H3"></path>
@@ -692,6 +764,88 @@ function App() {
               <AdminUsers token={auth.token} currentAdmin={auth.admin} />
             )}
           </main>
+        </div>
+      )}
+
+      {auth && changePasswordOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="change-password-title"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(15, 23, 42, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '1rem'
+          }}
+        >
+          <div className="panel" style={{ width: '100%', maxWidth: '420px', padding: '1.5rem' }}>
+            <div className="panel-header" style={{ marginBottom: '1rem' }}>
+              <h3 id="change-password-title">Change password</h3>
+              <button className="ghost-btn" type="button" onClick={closeChangePassword}>
+                Close
+              </button>
+            </div>
+            <form onSubmit={handleChangePassword} style={{ display: 'grid', gap: '0.85rem' }}>
+              <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem' }}>
+                <span>Current password</span>
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  required
+                  style={{ padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem' }}>
+                <span>New password (min 8 characters)</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  required
+                  style={{ padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: '0.35rem', fontSize: '0.875rem' }}>
+                <span>Confirm new password</span>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={confirmNewPassword}
+                  onChange={(event) => setConfirmNewPassword(event.target.value)}
+                  required
+                  style={{ padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1' }}
+                />
+              </label>
+              {changePasswordError && (
+                <p className="admin-feedback admin-error" role="alert" style={{ margin: 0 }}>
+                  {changePasswordError}
+                </p>
+              )}
+              {changePasswordSuccess && (
+                <p className="admin-feedback" role="status" style={{ margin: 0, color: '#15803d' }}>
+                  {changePasswordSuccess}
+                </p>
+              )}
+              <div className="action-row" style={{ marginTop: '0.25rem' }}>
+                <button className="primary-btn" type="submit" disabled={changePasswordSubmitting}>
+                  {changePasswordSubmitting ? 'Updating…' : 'Update password'}
+                </button>
+                <button className="ghost-btn" type="button" onClick={closeChangePassword}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
