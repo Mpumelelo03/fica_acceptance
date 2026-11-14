@@ -66,10 +66,16 @@ function LoginPage({ onLoginSuccess, authStorageError }) {
     setIsSubmitting(true);
 
     try {
+      const endpoint = setup ? '/api/admin/setup-2fa' : '/api/admin/login';
       const requestBody = { email, password };
-      if (requiresCode) requestBody.totp_code = totpCode.trim();
+      if (setup) {
+        requestBody.temp_secret = setup.tempSecret;
+        requestBody.totp_code = totpCode.trim();
+      } else if (requiresCode) {
+        requestBody.totp_code = totpCode.trim();
+      }
 
-      const response = await fetch(apiUrl('/api/admin/login'), {
+      const response = await fetch(apiUrl(endpoint), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody)
